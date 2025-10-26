@@ -1,0 +1,40 @@
+{
+    "activation": {
+        "combo": "alt+x"
+    },
+    "visual": {
+        "main_radius": 60,
+        "timer_interval_ms": 25,
+        "theme": "black_red"
+    },
+    "directions": {
+        "north": {
+            "label": "North",
+            "items": [],
+            "submenu_radius": 110,
+            "threshold_ratio": 0.6,
+            "item_size": 30
+        },
+        "east": {
+            "label": "East",
+            "items": [],
+            "submenu_radius": 110,
+            "threshold_ratio": 0.6,
+            "item_size": 30
+        },
+        "south": {
+            "label": "South",
+            "items": [],
+            "submenu_radius": 110,
+            "threshold_ratio": 0.6,
+            "item_size": 30
+        },
+        "west": {
+            "label": "West",
+            "items": [],
+            "submenu_radius": 110,
+            "threshold_ratio": 0.6,
+            "item_size": 30
+        }
+    }
+}
