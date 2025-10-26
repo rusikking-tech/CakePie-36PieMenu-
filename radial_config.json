@@ -1,6 +1,6 @@
 {
     "activation": {
-        "combo": "alt+x"
+        "combo": "mouse x1"
     },
     "visual": {
         "main_radius": 60,
@@ -9,29 +9,173 @@
     },
     "directions": {
         "north": {
-            "label": "North",
-            "items": [],
+            "label": "Интенты",
+            "items": [
+                {
+                    "keys": "1",
+                    "label": "1",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "2",
+                    "label": "2",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "3",
+                    "label": "3",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "4",
+                    "label": "4",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "h",
+                    "label": "Кусь!",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "j",
+                    "label": "Прыг!",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "k",
+                    "label": "Кик!",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "p",
+                    "label": "Вор!",
+                    "type": "hotkey"
+                }
+            ],
             "submenu_radius": 110,
             "threshold_ratio": 0.6,
             "item_size": 30
         },
         "east": {
-            "label": "East",
-            "items": [],
+            "label": "Бой",
+            "items": [
+                {
+                    "keys": "shift+1",
+                    "label": "Финт",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "shift+2",
+                    "label": "Аим",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "shift+3",
+                    "label": "Сильный",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "shift+4",
+                    "label": "Свифт",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "shift+5",
+                    "label": "Деф",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "shift+6",
+                    "label": "Слаб",
+                    "type": "hotkey"
+                }
+            ],
             "submenu_radius": 110,
             "threshold_ratio": 0.6,
             "item_size": 30
         },
         "south": {
-            "label": "South",
-            "items": [],
+            "label": "Маг",
+            "items": [
+                {
+                    "keys": "alt+1",
+                    "label": "Альт1",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+2",
+                    "label": "Альт2",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+3",
+                    "label": "Альт3",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+4",
+                    "label": "Альт4",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+5",
+                    "label": "Альт5",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+6",
+                    "label": "Альт6",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+7",
+                    "label": "Альт7",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+8",
+                    "label": "Альт8",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+9",
+                    "label": "Альт9",
+                    "type": "hotkey"
+                }
+            ],
             "submenu_radius": 110,
             "threshold_ratio": 0.6,
             "item_size": 30
         },
         "west": {
-            "label": "West",
-            "items": [],
+            "label": "Сума",
+            "items": [
+                {
+                    "keys": "f",
+                    "label": "Пояс",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "shift+e",
+                    "label": "Левая Сума",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+e",
+                    "label": "Пояс Правый",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "alt+q",
+                    "label": "Пояс Левый",
+                    "type": "hotkey"
+                },
+                {
+                    "keys": "e",
+                    "label": "правая сума",
+                    "type": "hotkey"
+                }
+            ],
             "submenu_radius": 110,
             "threshold_ratio": 0.6,
             "item_size": 30

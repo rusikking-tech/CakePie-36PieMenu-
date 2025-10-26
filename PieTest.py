@@ -2,7 +2,7 @@ import sys
 import os
 import json
 import math
-import threading 
+import threading
 import time
 from pathlib import Path
 from typing import List, Dict, Optional, Union
@@ -122,6 +122,7 @@ class RadialOverlay(QtWidgets.QWidget):
     
     # Сигнал для перехода на подменю 
     direction_passed_threshold = QtCore.pyqtSignal(str) 
+    back_to_main_menu = QtCore.pyqtSignal(str) # НОВЫЙ СИГНАЛ ДЛЯ ВОЗВРАТА
     _last_selected_direction: Optional[str] = None
     
     SUBMENU_COLORS = {
@@ -130,6 +131,19 @@ class RadialOverlay(QtWidgets.QWidget):
         'south': QtGui.QColor(20, 180, 20, 255),  # Зелёный
         'west': QtGui.QColor(20, 20, 200, 255)    # Синий
     }
+    
+    # --- НОВЫЕ КОНСТАНТЫ ДЛЯ КНОПКИ "НАЗАД" ---
+    BACK_BUTTON_RADIUS = 25 # Радиус кнопки "Назад" (шарика)
+    BACK_BUTTON_DIST = 60   # Расстояние от центра
+    # Позиции кнопки "Назад" (противоположно направлению подменю)
+    BACK_POSITIONS = {
+        'north': {'dx': 0, 'dy': BACK_BUTTON_DIST},  # North (СЕВЕР) -> Back button at SOUTH (ЮГ)
+        'east': {'dx': -BACK_BUTTON_DIST, 'dy': 0},  # East (ВОСТОК) -> Back button at WEST (ЗАПАД)
+        'south': {'dx': 0, 'dy': -BACK_BUTTON_DIST}, # South (ЮГ) -> Back button at NORTH (СЕВЕР)
+        'west': {'dx': BACK_BUTTON_DIST, 'dy': 0}    # West (ЗАПАД) -> Back button at EAST (ВОСТОК)
+    }
+    # ---------------------------------------------
+    
 
     def __init__(self, cfg: Dict):
         super().__init__(None, QtCore.Qt.WindowStaysOnTopHint | QtCore.Qt.FramelessWindowHint | QtCore.Qt.Tool)
@@ -151,6 +165,9 @@ class RadialOverlay(QtWidgets.QWidget):
         self.menu_data: Union[Dict, List] = {} 
         self.current_direction = None 
         self.highlight_index: Optional[int] = None 
+        
+        # НОВАЯ ПЕРЕМЕННАЯ: Флаг наведения на кнопку "Назад"
+        self._mouse_over_back_button = False
         
         vis_cfg = cfg.get("visual", DEFAULT_CONFIG["visual"])
         
@@ -179,16 +196,17 @@ class RadialOverlay(QtWidgets.QWidget):
         """Скрывает всплывающую подсказку."""
         QtWidgets.QToolTip.hideText()
         
-    def open_main_menu(self, x: int, y: int):
+    def open_main_menu(self, x: int, y: int, move_window: bool = True):
         
-        # --- ИЗМЕНЕНИЕ 2: Позиционирование окна ДО show(), чтобы избежать прыжка ---
-        # x, y - глобальные координаты курсора
-        # Вычисляем верхний левый угол (UL), чтобы центр 500x500 окна был на (x, y)
-        ul_x = x - OVERLAY_LOCAL_CENTER
-        ul_y = y - OVERLAY_LOCAL_CENTER
-        
-        # Устанавливаем позицию окна ДО вызова show()
-        self.move(ul_x, ul_y) 
+        if move_window:
+            # --- ИЗМЕНЕНИЕ 2: Позиционирование окна ДО show(), чтобы избежать прыжка ---
+            # x, y - глобальные координаты курсора
+            # Вычисляем верхний левый угол (UL), чтобы центр 500x500 окна был на (x, y)
+            ul_x = x - OVERLAY_LOCAL_CENTER
+            ul_y = y - OVERLAY_LOCAL_CENTER
+            
+            # Устанавливаем позицию окна ДО вызова show()
+            self.move(ul_x, ul_y) 
         
         # FИКСИРУЕМ ЦЕНТР МЕНЮ (теперь это локальный центр 250, 250)
         self.center_x = OVERLAY_LOCAL_CENTER
@@ -202,6 +220,7 @@ class RadialOverlay(QtWidgets.QWidget):
         self.highlight_index = None
         self._last_selected_direction = None 
         self.preview_direction = None
+        self._mouse_over_back_button = False # Сброс
         
         # Включаем игнорирование событий мыши
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
@@ -213,11 +232,19 @@ class RadialOverlay(QtWidgets.QWidget):
         self.show()
         self._monitor_timer.start()
 
+    # --- НОВЫЙ МЕТОД: Возврат в главное меню (Level 0) с правильным позиционированием ---
+    def go_to_main_menu(self, global_x: int, global_y: int):
+        """Переключает меню на Level 0 и перемещает оверлей обратно в исходную позицию."""
+        # global_x, global_y - это _initial_center_x/_initial_center_y из контроллера
+        self.open_main_menu(global_x, global_y, move_window=True)
+    # -------------------------------------------------------------------------------------
+
     def open_submenu(self, direction: str, items: List[Dict]):
         # self.center_x и self.center_y уже зафиксированы в локальном центре окна
         self.menu_level = 1
         self.menu_data = [it for it in items if it.get('keys') or it.get('value')]
         self.current_direction = direction
+        self._mouse_over_back_button = False
         
         # При открытии подменю, если элементов нет, highlight_index остаётся None
         # Если элементы есть, выделяем первый (для навигации колесом)
@@ -229,7 +256,7 @@ class RadialOverlay(QtWidgets.QWidget):
         self.active = True
         self.preview_direction = None
         
-        # Выключаем игнорирование событий мыши, чтобы можно было ловить mouseMoveEvent И wheelEvent
+        # Выключаем игнорирование событий мыши, чтобы можно было ловить mouseMoveEvent И wheelEvent И click
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, False)
         
         dir_cfg = self.cfg['directions'].get(direction, {})
@@ -262,6 +289,7 @@ class RadialOverlay(QtWidgets.QWidget):
         self._monitor_timer.stop()
         self._hide_tooltip()
         self.preview_direction = None
+        self._mouse_over_back_button = False
         
         # Восстанавливаем игнорирование событий мыши
         self.setAttribute(QtCore.Qt.WA_TransparentForMouseEvents, True)
@@ -275,6 +303,23 @@ class RadialOverlay(QtWidgets.QWidget):
         # mx, my - координаты относительно окна 500x500
         mx, my = event.pos().x(), event.pos().y()
         
+        # --- Логика для кнопки "Назад" ---
+        back_pos = self.BACK_POSITIONS.get(self.current_direction)
+        if back_pos:
+            back_x = self.center_x + back_pos['dx']
+            back_y = self.center_y + back_pos['dy']
+            d_back = math.hypot(mx - back_x, my - back_y)
+            
+            # НОВЫЙ ПОРОГ АКТИВАЦИИ КНОПКИ "НАЗАД"
+            if d_back < self.BACK_BUTTON_RADIUS + 10: 
+                self._mouse_over_back_button = True
+                self.highlight_index = None # Сброс выделения подменю
+                self._show_tooltip("Back to Main Menu")
+                self.update()
+                return
+            else:
+                self._mouse_over_back_button = False
+
         # Логика для menu_level 1 (Submenu) - Наведение мышью имеет приоритет
         items = self.menu_data 
         n = len(items)
@@ -301,7 +346,7 @@ class RadialOverlay(QtWidgets.QWidget):
         # Если мышь наведена на элемент, устанавливаем его как выделенный
         if mouse_over_index is not None:
             self.highlight_index = mouse_over_index
-        elif self.highlight_index is None and n > 0:
+        elif self.highlight_index is None and n > 0 and not self._mouse_over_back_button:
             # Если мышь не наведена ни на что, но элементы есть, сбрасываем highlight_index на 0
             # для удобства навигации колесом
             self.highlight_index = 0
@@ -309,22 +354,50 @@ class RadialOverlay(QtWidgets.QWidget):
         # Обновление тултипа
         if self.highlight_index is not None and self.highlight_index != old_highlight_index:
             self._update_tooltip_for_highlighted_item()
-        elif self.highlight_index is None and old_highlight_index is not None:
+        elif self.highlight_index is None and old_highlight_index is not None and not self._mouse_over_back_button:
             self._hide_tooltip()
             
         self.update() 
         
+    def mouseReleaseEvent(self, event: QtGui.QMouseEvent):
+        """Обрабатывает отпускание кнопки мыши для активации кнопки 'Назад'."""
+        if self.active and self.menu_level == 1 and event.button() == QtCore.Qt.LeftButton:
+            
+            # Проверяем, было ли наведение на кнопку "Назад"
+            if self._mouse_over_back_button:
+                # Отправка сигнала в контроллер для возврата
+                self.back_to_main_menu.emit(self.current_direction) 
+                return
+            
+            # Если кнопка "Назад" не наведена, позволяем основному коду
+            # RadialController обработать выбор подменю при отпускании активатора.
+            # Если это обычный клик левой кнопкой, игнорируем его
+            # (выбор элемента происходит при отпускании активатора в контроллере).
+            
+        super().mouseReleaseEvent(event)
+
+
     def wheelEvent(self, event: QtGui.QWheelEvent):
         """Обрабатывает прокрутку колеса мыши для навигации по подменю."""
         if not self.active or self.menu_level != 1:
             super().wheelEvent(event)
             return
 
+        # Сброс флага наведения на кнопку "Назад" при прокрутке
+        self._mouse_over_back_button = False
+        
         items = self.menu_data
         n = len(items)
-        if n == 0 or self.highlight_index is None:
+        if n == 0:
             return
 
+        # Инициализируем highlight_index, если он None (например, после ухода с кнопки "Назад")
+        if self.highlight_index is None:
+            self.highlight_index = 0
+            self._update_tooltip_for_highlighted_item()
+            self.update()
+            return
+            
         # numDegrees() для точной прокрутки, < 0 для прокрутки вверх, > 0 для прокрутки вниз
         degrees = event.angleDelta().y()
 
@@ -344,7 +417,7 @@ class RadialOverlay(QtWidgets.QWidget):
                 
     def _update_tooltip_for_highlighted_item(self):
         """Обновляет тултип для текущего выделенного элемента."""
-        if self.highlight_index is not None:
+        if self.highlight_index is not None and not self._mouse_over_back_button:
             selected_item = self.menu_data[self.highlight_index]
             label = selected_item.get('label', '')
             keys = selected_item.get('keys', '')
@@ -545,10 +618,42 @@ class RadialOverlay(QtWidgets.QWidget):
                         label_text = label_text[:5] + "..." if len(label_text) > 5 else label_text
                         
                     qp.drawText(QtCore.QRect(px - text_rect_width//2, py - text_rect_height//2, text_rect_width, text_rect_height), QtCore.Qt.AlignCenter, label_text)
+                    
+            # --- 5. Draw BACK Button (Menu Level 1) ---
+            back_pos = self.BACK_POSITIONS.get(self.current_direction)
+            if back_pos:
+                back_x = self.center_x + back_pos['dx']
+                back_y = self.center_y + back_pos['dy']
+                back_center_pt = QtCore.QPoint(back_x, back_y)
+                
+                # Цвет/стиль кнопки "Назад"
+                back_radius = self.BACK_BUTTON_RADIUS
+                
+                if self._mouse_over_back_button:
+                    # Подсветка при наведении
+                    back_brush = QtGui.QBrush(QtGui.QColor(255, 255, 255, 255))
+                    back_pen_color = QtGui.QColor(0,0,0,255)
+                else:
+                    # Нормальное состояние (белый)
+                    back_brush = QtGui.QBrush(QtGui.QColor(255, 255, 255, 180))
+                    back_pen_color = QtGui.QColor(0,0,0,200)
+                    
+                qp.setBrush(back_brush)
+                qp.setPen(QtCore.Qt.NoPen)
+                qp.drawEllipse(back_center_pt, back_radius, back_radius)
+                
+                # Стрелка "Назад" (напр., <) или текст (напр., 'BACK')
+                qp.setPen(QtGui.QPen(back_pen_color))
+                qp.setFont(QtGui.QFont("Sans", 10, QtGui.QFont.Bold))
+                qp.drawText(QtCore.QRect(back_x - back_radius, back_y - back_radius, back_radius * 2, back_radius * 2), QtCore.Qt.AlignCenter, "◄")
 
 
     def get_selection(self) -> Optional[Dict]:
         """Returns the final selection based on the current state (only Level 1 selection is returned)."""
+        # Если навелись на кнопку "Назад", то нет выбора элемента
+        if self._mouse_over_back_button:
+            return None
+            
         if self.menu_level == 0 or self.highlight_index is None:
             return None
         
@@ -1161,6 +1266,8 @@ class RadialController(QtCore.QObject):
         self.activation_started.connect(self._on_activation_started)
         self.activation_ended.connect(self._on_activation_ended)
         self.overlay.direction_passed_threshold.connect(self._on_direction_selected)
+        # НОВЫЙ СЛОТ: Обработка сигнала о возврате
+        self.overlay.back_to_main_menu.connect(self._on_back_to_main_menu) 
 
         self._monitor_timer = QtCore.QTimer(self)
         self._monitor_timer.timeout.connect(self._check_activation_state)
@@ -1224,6 +1331,16 @@ class RadialController(QtCore.QObject):
         self.overlay.open_main_menu(x, y)
 
     @QtCore.pyqtSlot(str)
+    def _on_back_to_main_menu(self, direction: str):
+        """Возвращение в Level 0 с сохранением позиции центра."""
+        if self._menu_level == 1 and self._active:
+            # Сброс состояния в контроллере
+            self._menu_level = 0
+            self._current_direction = None
+            # Перемещение оверлея обратно в центр, где было открыто ГЛАВНОЕ меню
+            self.overlay.go_to_main_menu(self._initial_center_x, self._initial_center_y)
+    
+    @QtCore.pyqtSlot(str)
     def _on_direction_selected(self, direction: str):
         # Эта функция вызывается, когда курсор пересек main_radius
         if self._menu_level == 0 and self._active:
@@ -1259,7 +1376,22 @@ class RadialController(QtCore.QObject):
     
     @QtCore.pyqtSlot()
     def _on_activation_ended(self):
+        # Если находимся в Level 1, проверяем, был ли выбран элемент подменю (или кнопка "Назад")
+        if self._menu_level == 1 and self.overlay._mouse_over_back_button:
+            # Пользователь просто отпустил активатор, находясь над кнопкой "Назад",
+            # но обработка возврата уже произошла по клику (mouseReleaseEvent)
+            # или должна произойти по отпусканию, если клик не был выполнен.
+            # В данном случае, так как клик мыши на кнопке "Назад" реализован в RadialOverlay
+            # (mouseReleaseEvent), мы здесь просто закрываем меню, если кнопка "Назад"
+            # была наведена, но Level 1 все еще активен. 
+            # *Для простоты*: Если Level 1 активен и активатор отпущен, но выборка пуста, 
+            # мы считаем это отменой, если не было выбора.
+            pass # Не делаем ничего, если это Level 1 и кнопка "Назад" была наведена/активирована. 
+                 # Основной код выбора элемента ниже.
+            
         sel = self.overlay.get_selection()
+        
+        # Закрываем меню в любом случае.
         self.overlay.close_menu()
         self._active = False 
         self._menu_level = 0
