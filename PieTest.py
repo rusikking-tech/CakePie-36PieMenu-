@@ -767,7 +767,7 @@ class HotkeyCaptureDialog(QtWidgets.QDialog):
         if key_name == 'alt': return 'alt'
         
         if key_name in ('lcontrol', 'rcontrol'): return 'ctrl'
-        if key_name in ('lshift', 'rshift'): return 'shift'
+        if key_name in ('lshift', 'rshift'): 'shift'
         if key_name in ('lmenu', 'rmenu'): return 'alt'
         
         return key_name
@@ -1238,7 +1238,7 @@ class SettingsWindow(QtWidgets.QWidget):
         self.close()
 
 # ------------------------------
-# Контроллер (обновлён для горячей перезагрузки конфигурации)
+# Контроллер (обновлён для горячей перезагрузки конфигурации и надежного прожатия хоткеев)
 # ------------------------------
 class RadialController(QtCore.QObject):
     
@@ -1246,6 +1246,9 @@ class RadialController(QtCore.QObject):
     activation_ended = QtCore.pyqtSignal()
     
     _MAX_DEBOUNCE = 3 
+    
+    # Список модификаторов для форсированного отпускания/восстановления
+    _MODIFIERS = ['shift', 'ctrl', 'alt']
 
     def __init__(self, cfg: Dict, overlay: RadialOverlay):
         super().__init__()
@@ -1273,6 +1276,36 @@ class RadialController(QtCore.QObject):
         self._monitor_timer.timeout.connect(self._check_activation_state)
         
         self._update_config_dependent_state(cfg) # Инициализация
+        
+    def _get_active_modifiers(self) -> List[str]:
+        """Возвращает список модификаторов, которые в данный момент нажаты."""
+        active_mods = []
+        for mod in self._MODIFIERS:
+            try:
+                if keyboard.is_pressed(mod):
+                    active_mods.append(mod)
+            except Exception:
+                pass # Игнорируем ошибки, если кнопка не найдена/недоступна
+        return active_mods
+    
+    def _force_release_modifiers(self, mods_to_release: List[str]):
+        """Форсированно отпускает указанные модификаторы."""
+        for mod in mods_to_release:
+            try:
+                # Проверяем, чтобы избежать ошибок с попыткой отпускания 'alt'
+                # если он используется как активатор (он может быть уже отпущен)
+                if keyboard.is_pressed(mod): 
+                    keyboard.release(mod)
+            except Exception as e:
+                print(f"Error releasing {mod}: {e}")
+                
+    def _restore_modifiers(self, mods_to_restore: List[str]):
+        """Восстанавливает (нажимает) указанные модификаторы."""
+        for mod in mods_to_restore:
+            try:
+                keyboard.press(mod)
+            except Exception as e:
+                print(f"Error pressing {mod}: {e}")
 
     def _update_config_dependent_state(self, new_cfg: Dict):
         """Обновляет состояние контроллера на основе новой конфигурации."""
@@ -1376,22 +1409,10 @@ class RadialController(QtCore.QObject):
     
     @QtCore.pyqtSlot()
     def _on_activation_ended(self):
-        # Если находимся в Level 1, проверяем, был ли выбран элемент подменю (или кнопка "Назад")
-        if self._menu_level == 1 and self.overlay._mouse_over_back_button:
-            # Пользователь просто отпустил активатор, находясь над кнопкой "Назад",
-            # но обработка возврата уже произошла по клику (mouseReleaseEvent)
-            # или должна произойти по отпусканию, если клик не был выполнен.
-            # В данном случае, так как клик мыши на кнопке "Назад" реализован в RadialOverlay
-            # (mouseReleaseEvent), мы здесь просто закрываем меню, если кнопка "Назад"
-            # была наведена, но Level 1 все еще активен. 
-            # *Для простоты*: Если Level 1 активен и активатор отпущен, но выборка пуста, 
-            # мы считаем это отменой, если не было выбора.
-            pass # Не делаем ничего, если это Level 1 и кнопка "Назад" была наведена/активирована. 
-                 # Основной код выбора элемента ниже.
-            
+        
+        # 1. Проверка выбора и закрытие меню
         sel = self.overlay.get_selection()
         
-        # Закрываем меню в любом случае.
         self.overlay.close_menu()
         self._active = False 
         self._menu_level = 0
@@ -1402,46 +1423,93 @@ class RadialController(QtCore.QObject):
         self._initial_center_x = 0 
         self._initial_center_y = 0
         
-        if sel:
-            item = sel['item']
-            item_type = item.get('type', 'hotkey') 
+        if not sel:
+            return
+
+        # 2. Подготовка к выполнению действия
+        item = sel['item']
+        item_type = item.get('type', 'hotkey') 
+        
+        # --- НОВАЯ ВСПОМОГАТЕЛЬНАЯ ФУНКЦИЯ ДЛЯ НАДЕЖНОГО ПРОЖАТИЯ ---
+        def _execute_hotkey_reliably(seq: str):
+            """
+            Выполняет комбинацию клавиш (например, 'alt+2') через явное press/release 
+            с небольшой задержкой для надежности, игнорируя keyboard.send().
+            """
+            # Нормализуем и разбиваем на ключи
+            # Убеждаемся, что клавиши корректно разбиваются, например, 'alt+2' -> ['alt', '2']
+            keys = [k.strip() for k in seq.lower().split('+') if k.strip()]
+            if not keys:
+                return
+
+            # Последний ключ — основное действие (например, '2')
+            action_key = keys[-1]
+            # Все остальные — модификаторы (например, 'alt', 'ctrl')
+            modifiers = keys[:-1]
             
+            # Задержка между действиями (для надежности)
+            DEBOUNCE_DELAY = 0.01 
+            
+            try:
+                # 1. Нажать модификаторы
+                for mod in modifiers:
+                    keyboard.press(mod)
+                time.sleep(DEBOUNCE_DELAY)
+                
+                # 2. Нажать и отпустить основную клавишу
+                keyboard.press(action_key)
+                time.sleep(DEBOUNCE_DELAY)
+                keyboard.release(action_key)
+                time.sleep(DEBOUNCE_DELAY) 
+
+                # 3. Отпустить модификаторы (в обратном порядке для максимальной совместимости)
+                for mod in reversed(modifiers):
+                    keyboard.release(mod)
+
+            except Exception as e:
+                print(f"Error during reliable hotkey execution for '{seq}': {e}")
+                
+        # --- КОНЕЦ ВСПОМОГАТЕЛЬНОЙ ФУНКЦИИ ---
+        
+        # 3. Идентификация и форсированное отпускание удерживаемых модификаторов
+        mods_to_restore = self._get_active_modifiers()
+        self._force_release_modifiers(self._MODIFIERS) # Отпускаем все 3: shift, ctrl, alt
+        
+        # 4. Выполнение действия
+        try:
             if item_type == 'text':
                 text_to_write = item.get('value', '')
                 if text_to_write:
-                    try:
-                        keyboard.write(text_to_write)
-                    except Exception as e:
-                        print("Failed writing text:", e)
+                    # Добавляем небольшую задержку, чтобы система обработала отпускание модификаторов
+                    time.sleep(0.02) 
+                    keyboard.write(text_to_write)
             
             elif item_type == 'hotkey_and_text': 
                 seq = item.get('keys','')
                 text_to_write = item.get('value', '')
                 
                 if seq:
-                    try:
-                        keyboard.send(seq)
-                    except Exception as e:
-                        print("Failed sending sequence:", seq, e)
+                    _execute_hotkey_reliably(seq) # Используем новый надежный метод
                 
-                # --- ИЗМЕНЕНИЕ: Добавление задержки перед вводом текста (0.05 сек) ---
-                if seq and text_to_write:
-                    time.sleep(0.05) 
-                # --- КОНЕЦ ИЗМЕНЕНИЯ ---
-                        
                 if text_to_write:
-                    try:
-                        keyboard.write(text_to_write)
-                    except Exception as e:
-                        print("Failed writing text:", e)
+                    # Небольшая задержка перед вводом текста
+                    time.sleep(0.05) 
+                    keyboard.write(text_to_write)
             
             else: # hotkey
                 seq = item.get('keys','')
                 if seq:
-                    try:
-                        keyboard.send(seq)
-                    except Exception as e:
-                        print("Failed sending sequence:", seq, e)
+                    _execute_hotkey_reliably(seq) # Используем новый надежный метод
+
+        except Exception as e:
+            print(f"Failed performing action ({item_type}, {item.get('keys', '')}):", e)
+        finally:
+            # Небольшая задержка перед восстановлением модификаторов
+            time.sleep(0.05) 
+            
+            # 5. Восстановление модификаторов, которые были нажаты до открытия меню
+            self._restore_modifiers(mods_to_restore)
+
 
     def stop(self):
         self._monitor_timer.stop()

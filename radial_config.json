@@ -3,7 +3,7 @@
         "combo": "mouse x1"
     },
     "visual": {
-        "main_radius": 60,
+        "main_radius": 40,
         "timer_interval_ms": 25,
         "theme": "black_red"
     },
@@ -52,7 +52,7 @@
                     "type": "hotkey"
                 }
             ],
-            "submenu_radius": 110,
+            "submenu_radius": 60,
             "threshold_ratio": 0.6,
             "item_size": 30
         },
@@ -90,7 +90,7 @@
                     "type": "hotkey"
                 }
             ],
-            "submenu_radius": 110,
+            "submenu_radius": 60,
             "threshold_ratio": 0.6,
             "item_size": 30
         },
@@ -104,7 +104,7 @@
                 },
                 {
                     "keys": "alt+2",
-                    "label": "Альт2",
+                    "label": "альт2",
                     "type": "hotkey"
                 },
                 {
@@ -143,7 +143,7 @@
                     "type": "hotkey"
                 }
             ],
-            "submenu_radius": 110,
+            "submenu_radius": 60,
             "threshold_ratio": 0.6,
             "item_size": 30
         },
@@ -166,7 +166,7 @@
                     "type": "hotkey"
                 },
                 {
-                    "keys": "alt+q",
+                    "keys": "alt+й",
                     "label": "Пояс Левый",
                     "type": "hotkey"
                 },
@@ -176,7 +176,7 @@
                     "type": "hotkey"
                 }
             ],
-            "submenu_radius": 110,
+            "submenu_radius": 60,
             "threshold_ratio": 0.6,
             "item_size": 30
         }
